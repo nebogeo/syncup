@@ -16,12 +16,12 @@
 
 #include <unistd.h>
 #include <sys/time.h>
-#include <spiralcore/NoteTable.h>
+#include "NoteTable.h"
 #include "SyncUp.h"
+#include "Time.h"
 
 using namespace spiralcore;
 
-EventQueue SyncUp::m_EventQueue;
 float SyncUp::m_Delay = 0;
 float SyncUp::m_ClockBPM = 0;
 int SyncUp::m_ClockBPB = 0;
@@ -30,56 +30,60 @@ SyncUp::SyncUp(const string &Port, const string &DestPort, const vector<string> 
 {
 	cerr<<"Starting syncup on "<<Port<<" sending to "<<DestPort<<endl;
 	m_Destination=lo_address_new_from_url(DestPort.c_str());
-	
+
 	for (vector<string>::const_iterator i=ClockDestPorts.begin(); i!=ClockDestPorts.end(); ++i)
-	{ 
+	{
 		cerr<<"Adding clock destination: "<<(*i)<<endl;
 		m_ClockDestPorts.push_back(lo_address_new_from_url(i->c_str()));
     }
-	
+
 	m_Server = lo_server_thread_new(Port.c_str(), ErrorHandler);
     lo_server_thread_add_method(m_Server, NULL, NULL, DefaultHandler, NULL);
     lo_server_thread_add_method(m_Server, "/sync", "if", SyncHandler, this);
     lo_server_thread_add_method(m_Server, "/delay", "f", DelayHandler, this);
     lo_server_thread_add_method(m_Server, "/clock", "if", ClockHandler, this);
+
+//    lo_server_thread_add_method(m_Server, "/esp/clock", "fff", EspClockHandler, this);
+    lo_server_thread_add_method(m_Server, "/esp/beat", "fif", EspBeatHandler, this);
+
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Audio thread side
 
 void SyncUp::Run()
-{		
+{
 	lo_server_thread_start(m_Server);
 	Time TimeNow;
 	Time TimeThen;
 	double Clock=0;
 	Time NextTick;
-	
-    while (1) 
+
+    while (1)
 	{
 		TimeNow.SetToNow();
-		
+
 		if (m_ClockBPM>0 && m_ClockBPB>0)
 		{
 			double NewClock = m_ClockBPB*(1/(m_ClockBPM/60.0f));
-			
+
 			if (Clock!=NewClock || TimeNow>NextTick)
 			{
 				Clock = NewClock;
 				NextTick=TimeNow;
 				NextTick+=Clock;
-				
+
 				for (vector<lo_address>::iterator i=m_ClockDestPorts.begin(); i!=m_ClockDestPorts.end(); ++i)
 				{
 			    	lo_send(*i, "/sync", "if", m_ClockBPB, m_ClockBPM);
 					cerr<<"clock sending sync..."<<endl;
-				}	
+				}
 			}
 		}
-		
+
 		TimeThen=TimeNow;
-		usleep(100); 
-	}  
+		usleep(100);
+	}
 }
 
 void SyncUp::ErrorHandler(int num, const char *msg, const char *path)
@@ -116,17 +120,58 @@ int SyncUp::SyncHandler(const char *path, const char *types, lo_arg **argv,
 		    int argc, void *data, void *user_data)
 {
 	SyncUp *server = (SyncUp*)user_data;
-	
+
 	if (types[0]=='i' && types[1]=='f')
 	{
 		int beatsperbar = argv[0]->i;
 		float beatsperminute = argv[1]->f;
-		
+
 		cerr<<"syncup: sync to "<<beatsperbar<<"bpb "<<beatsperminute<<"bpm"<<endl;
 		Time time;
 		time.SetToNow();
 		time+=m_Delay;
-		
+
+		if (beatsperminute>0)
+		{
+			// advance to next bar sync
+			time+=beatsperbar*(1/(beatsperminute/60.0f));
+
+			time.Print();
+
+			// send the sync out
+			lo_message oscmsg=lo_message_new();
+			lo_message_add_int64(oscmsg,time.Seconds);
+			lo_message_add_int64(oscmsg,time.Fraction);
+			lo_message_add_int32(oscmsg,beatsperbar);
+			lo_message_add_float(oscmsg,beatsperminute);
+			lo_send_message(server->m_Destination, "/sync", oscmsg);
+			lo_message_free(oscmsg);
+		}
+	}
+	return 1;
+}
+
+int SyncUp::EspBeatHandler(const char *path, const char *types, lo_arg **argv,
+		    int argc, void *data, void *user_data)
+{
+	SyncUp *server = (SyncUp*)user_data;
+
+    // beat number
+    // beats per bar
+    // duration of a beat
+
+    // fif
+
+	if (types[0]=='f' && types[1]=='i')
+	{
+		int beatsperbar = argv[0]->i;
+		float beatsperminute = 1.0f/argv[1]->f;
+
+		cerr<<"syncup: sync to "<<beatsperbar<<"bpb "<<beatsperminute<<"bpm"<<endl;
+		Time time;
+		time.SetToNow();
+		time+=m_Delay;
+
 		if (beatsperminute>0)
 		{
 			// advance to next bar sync
@@ -136,10 +181,10 @@ int SyncUp::SyncHandler(const char *path, const char *types, lo_arg **argv,
 
 			// send the sync out
 			lo_message oscmsg=lo_message_new();
-			lo_message_add_int64(oscmsg,time.Seconds); 
-			lo_message_add_int64(oscmsg,time.Fraction); 
-			lo_message_add_int32(oscmsg,beatsperbar); 
-			lo_message_add_float(oscmsg,beatsperminute); 
+			lo_message_add_int64(oscmsg,time.Seconds);
+			lo_message_add_int64(oscmsg,time.Fraction);
+			lo_message_add_int32(oscmsg,beatsperbar);
+            lo_message_add_float(oscmsg,beatsperminute);
 			lo_send_message(server->m_Destination, "/sync", oscmsg);
 			lo_message_free(oscmsg);
 		}

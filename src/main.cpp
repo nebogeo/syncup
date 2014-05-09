@@ -15,7 +15,10 @@
 // Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 
 #include <iostream>
+#include <vector>
 #include "SyncUp.h"
+
+using namespace std;
 
 int main(int argc, char **argv)
 {
@@ -25,22 +28,22 @@ int main(int argc, char **argv)
 		cerr<<"syncup - for all your clock and sync needs!"<<endl;
 		cerr<<"-------------------------------------------"<<endl;
 		cerr<<"usage: syncup oscportnumber destport clockdest1 clockdest2 ..."<<endl<<endl;
-		
-		cerr<<"Sync Mode:"<<endl; 
+
+		cerr<<"Sync Mode:"<<endl;
 		cerr<<"Listens to oscportnumber for [/sync if : bpb bpm] "<<endl;
 		cerr<<"then calcuates next bar start time, and sends a similar "<<endl;
 		cerr<<"message [/sync iif : timesecs timefrac bpm] with a time"<<endl;
 		cerr<<"stamp for the next bar start time to destport."<<endl;
-		cerr<<"This is useful because the application being synced"<<endl;		
-		cerr<<"can do so accurately within it's own time - it's probably"<<endl;		
-		cerr<<"already a bit late by the time we get it, so it minimises"<<endl;		
-		cerr<<"the error."<<endl;		
+		cerr<<"This is useful because the application being synced"<<endl;
+		cerr<<"can do so accurately within it's own time - it's probably"<<endl;
+		cerr<<"already a bit late by the time we get it, so it minimises"<<endl;
+		cerr<<"the error."<<endl;
 		cerr<<"Use [/delay f : seconds] to add a delay offset."<<endl<<endl;
-		
-		cerr<<"Clock mode:"<<endl; 
+
+		cerr<<"Clock mode:"<<endl;
 		cerr<<"When started with [/clock if : bpb bpm] to oscportnumber,"<<endl;
 		cerr<<"sends [/sync if : bpb bpm] to all clockdest's periodically."<<endl<<endl;
-		
+
 		cerr<<"To use sync mode with the clock, set one of the "<<endl;
 		cerr<<"clockdest ports to oscportnumber."<<endl;
 		return -1;
